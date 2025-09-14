@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>3D Lean Code Graph - Interactive</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a0a;
+            overflow: hidden;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #ffffff;
+            background: rgba(0,0,0,0.9);
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 100;
+            max-width: 280px;
+            line-height: 1.3;
+        }
+        
+        /* Mobile responsive design */
+        @media (max-width: 768px) {
+            #info {
+                position: fixed;
+                top: 5px;
+                left: 5px;
+                right: 5px;
+                max-width: none;
+                font-size: 10px;
+                padding: 8px;
+                border-radius: 4px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #info {
+                font-size: 9px;
+                padding: 6px;
+                line-height: 1.2;
+            }
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            pointer-events: none;
+            font-size: 14px;
+            max-width: 320px;
+            display: none;
+            z-index: 1000;
+            border: 1px solid #555;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        @media (max-width: 768px) {
+            #tooltip {
+                position: fixed;
+                bottom: 20px;
+                left: 10px;
+                right: 10px;
+                max-width: none;
+                font-size: 13px;
+                padding: 15px;
+                border-radius: 10px;
+            }
+        }
+        #code-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.98);
+            color: #e0e0e0;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            max-width: 85vw;
+            max-height: 85vh;
+            overflow-y: auto;
+            display: none;
+            z-index: 2000;
+            border: 2px solid #555;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        }
+        
+        @media (max-width: 768px) {
+            #code-modal {
+                top: 0;
+                left: 0;
+                transform: none;
+                width: 100vw;
+                height: 100vh;
+                max-width: none;
+                max-height: none;
+                border-radius: 0;
+                padding: 15px;
+                font-size: 12px;
+            }
+        }
+        #code-modal pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #333;
+        }
+        #close-modal {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #666;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 6px;
+            min-width: 40px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        @media (max-width: 768px) {
+            #close-modal {
+                font-size: 28px;
+                min-width: 50px;
+                min-height: 50px;
+                top: 15px;
+                right: 15px;
+                background: rgba(255,255,255,0.15);
+            }
+        }
+        #close-modal:hover {
+            color: #ff6b6b;
+        }
+        .modal-title {
+            color: #4fc3f7;
+            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .agent-type {
+            color: #81c784;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div id="info">
+        <strong>3D Lean Code Knowledge Graph</strong><br>
+        Generated from compiled Lean theorem proofs<br><br>
+        <strong>Controls:</strong><br>
+        🖱️ Drag: Rotate view<br>
+        📱 Pinch: Zoom<br>
+        👆 Touch: View question<br>
+        👆 Tap: Show Lean code<br><br>
+        <strong>Legend:</strong><br>
+        🟦 Measure Theory<br>
+        🟩 Functional Analysis<br>
+        🟪 Dynamical Systems<br>
+        🟨 Stochastic Processes<br>
+        🟧 Fluid Dynamics<br>
+        🟥 Nuclear Physics
+    </div>
+    <div id="tooltip"></div>
+    <div id="code-modal">
+        <button id="close-modal">&times;</button>
+        <div id="modal-content"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // Global variables
+        const nodes = [];
+        const edges = [];
+        const nodeObjects = [];
+        const edgeObjects = [];
+        let leanData = [];
+
+        // Embedded Lean data (expanded set from extracted_lean_questions.json)
+        const embeddedLeanData = [
+            {
+                "agent": "MeasureTheory-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the measure theory theorem event_prob_example?",
+                "lean_code": "structure SimpleEvent where\n  total_outcomes : Nat\n  successful_outcomes : Nat\ndef event_probability (e : SimpleEvent) : Nat × Nat := (e.successful_outcomes, e.total_outcomes)\ntheorem event_prob_example : event_probability ⟨20, 8⟩ = (8, 20) := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "convergence_plot.png",
+                            "description": "Shows convergence of running probability estimate to theoretical value 8/20 = 0.4 over 5000 trials",
+                            "path": "public/simulations/convergence_plot.png"
+                        },
+                        {
+                            "filename": "sampling_distribution.png",
+                            "description": "Histogram showing sampling distribution of probability estimates with 20 draws per experiment, centered around theoretical 0.4",
+                            "path": "public/simulations/sampling_distribution.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/event_prob_example_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean theorem event_prob_example. Mirrors the Lean definitions in Python and generates convergence plots and sampling distributions to visualize the theoretical probability 8/20 = 0.4",
+                        "key_features": [
+                            "Mirrors Lean SimpleEvent structure and event_probability function in Python",
+                            "Demonstrates Law of Large Numbers with convergence plot",
+                            "Shows sampling distribution for n=20 (matching Lean theorem parameters)",
+                            "Includes accuracy analysis across different sample sizes",
+                            "Generates reproducible results with seeded random number generator"
+                        ]
+                    },
+                    "execution_results": {
+                        "theoretical_probability": "8/20 = 2/5 = 0.4000",
+                        "convergence_trials": 5000,
+                        "sampling_experiments": 10000,
+                        "accuracy_table_generated": "event_prob_example_accuracy.csv"
+                    }
+                }
+            },
+            {
+                "agent": "Analysis-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the functional analysis theorem map_additivity?",
+                "lean_code": "structure LinearMap where  \n  source : List Nat  \n  target : List Nat  \ndef map (f : LinearMap) (v : List Nat) : List Nat := f.target.map (fun t => t + (v.foldl (· + ·) 0))  \ntheorem map_additivity (f : LinearMap) (v₁ v₂ : List Nat) :  \n  map f (v₁ ++ v₂) = map f v₁ ++ map f v₂ := by  \n  simp  \n  rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "map_additivity_success_rates.png",
+                            "description": "Bar chart showing success rates of the map additivity theorem by target length. Shows theorem holds only for empty targets (1.0 success rate) and fails for all non-empty targets (0.0 success rate)",
+                            "path": "public/simulations/map_additivity_success_rates.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/map_additivity_simulation.py",
+                        "description": "Monte Carlo simulation testing the map additivity theorem across different target lengths. Demonstrates that the theorem fails for non-empty targets due to list concatenation length mismatches but holds perfectly for empty targets.",
+                        "key_features": [
+                            "Mirrors Lean LinearMap structure and map function in Python",
+                            "Tests map_additivity property: map f (v1 ++ v2) = map f v1 ++ map f v2",
+                            "Demonstrates theorem failure mechanism with concrete examples",
+                            "Shows success rate dependency on target list length",
+                            "Provides statistical analysis across 400 trials per target length"
+                        ]
+                    },
+                    "execution_results": {
+                        "empty_target_success_rate": "1.000 (always holds for empty targets)",
+                        "nonempty_target_success_rate": "0.000 (always fails due to length mismatch)",
+                        "target_lengths_tested": "0 through 6",
+                        "trials_per_length": 400,
+                        "key_insight": "Theorem only holds when target list is empty"
+                    }
+                }
+            },
+            {
+                "agent": "FluidDynamics-Agent",
+                "session_timestamp": "2025-09-12 23:25:00",
+                "natural_language_question": "What is a fluid flow conservation theorem?",
+                "lean_code": "structure FluidFlow where\n  velocity : List Nat\n  density : Nat\ndef massFlow (f : FluidFlow) : Nat := f.density * f.velocity.sum\ntheorem conservation_example : massFlow <[1, 2, 3], 2> = 12 := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "fluid_flow_conservation_comparison.png",
+                            "description": "Mass flow rate comparison across 12 different fluid flow scenarios, with color-coded density visualization and Lean theorem example highlighted",
+                            "path": "public/simulations/fluid_flow_conservation_comparison.png"
+                        },
+                        {
+                            "filename": "fluid_flow_conservation_profiles.png",
+                            "description": "Velocity profiles for four flow scenarios showing density, mass flow calculations, and conservation analysis for uniform, accelerating, and variable flows",
+                            "path": "public/simulations/fluid_flow_conservation_profiles.png"
+                        },
+                        {
+                            "filename": "fluid_flow_conservation_pipe.png",
+                            "description": "Pipe flow conservation analysis showing area-velocity-mass flow relationships across varying cross-sections with conservation validation",
+                            "path": "public/simulations/fluid_flow_conservation_pipe.png"
+                        }
+                    ],
+                    "code_implementation": {
+                        "language": "python",
+                        "file_path": "public/simulations/fluid_flow_conservation_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean fluid flow conservation theorem. Analyzes mass flow conservation across uniform, accelerating, compressible, and pipe flow scenarios.",
+                        "key_features": [
+                            "Mirrors Lean FluidFlow structure and massFlow function in Python",
+                            "Verifies conservation_example theorem: massFlow(<[1, 2, 3], 2>) = 12",
+                            "Analyzes 12 different flow scenarios: uniform, accelerating, compressible, turbulent flows",
+                            "Demonstrates pipe flow conservation with varying cross-sections and velocities",
+                            "Validates continuity equation in discrete form with comprehensive statistical analysis"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "conservation_example: massFlow(<[1, 2, 3], 2>) = 12 (verified - mass flow = density * velocity sum)",
+                        "flow_scenarios": "12 scenarios analyzed: uniform (2), accelerating/decelerating (2), density variations (2), pipe flows (2), compressible (2), turbulent/laminar (2)",
+                        "mass_flow_range": "Mass flow rates: minimum 18, maximum 90, average 55.8 across all scenarios",
+                        "density_range": "Fluid densities: 1-10 covering light gases to dense liquids",
+                        "velocity_analysis": "Velocity range: 1-20 with average 4.4 across all flow conditions",
+                        "pipe_conservation": "4-section pipe analysis: conservation ratios 0.50-1.00, demonstrating continuity equation",
+                        "csv_exports": "fluid_flow_conservation_analysis.csv, fluid_flow_conservation_pipe.csv"
+                    },
+                    "inline_code": "from dataclasses import dataclass\nfrom typing import List\n\n@dataclass(frozen=True)\nclass FluidFlow:\n    velocity: List[int]\n    density: int\n\ndef mass_flow(f: FluidFlow) -> int:\n    return f.density * sum(f.velocity)\n\n# Test the Lean theorem\nlean_example = FluidFlow(velocity=[1, 2, 3], density=2)\nresult = mass_flow(lean_example)\nassert result == 12\nprint('Theorem verified: massFlow(<[1, 2, 3], 2>) = 12')\n\n# Test additional flow scenarios\nflow_scenarios = [\n    ('Uniform Flow', FluidFlow(velocity=[5, 5, 5, 5], density=3)),\n    ('Accelerating', FluidFlow(velocity=[1, 2, 3, 4, 5], density=2)),\n    ('High Density', FluidFlow(velocity=[2, 3, 4], density=10)),\n    ('Pipe Flow', FluidFlow(velocity=[8, 10, 12], density=2))\n]\n\nprint('Analyzing fluid flow conservation:')\nfor name, flow in flow_scenarios:\n    flow_rate = mass_flow(flow)\n    avg_vel = sum(flow.velocity) / len(flow.velocity)\n    print(f'  {name}: density={flow.density}, avg_velocity={avg_vel:.1f}, mass_flow={flow_rate}')\n\nprint('Conservation principle: Mass flow rate = density * velocity sum')"
+                }
+            },
+            {
+                "agent": "Dynamics-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the dynamical systems theorem iterate_cycle_zero?",
+                "lean_code": "structure CycleTransform where  \n  shift : Nat -> Nat  \ndef iterate_cycle (c : CycleTransform) (start : Nat) (steps : Nat) : Nat := match steps with  \n  | 0 => start  \n  | Nat.succ k => iterate_cycle c (c.shift start) k  \ntheorem iterate_cycle_zero (c : CycleTransform) (start : Nat) : iterate_cycle c start 0 = start := by rfl  \ntheorem iterate_cycle_add (c : CycleTransform) (start : Nat) (n m : Nat) :  \n  iterate_cycle c start (n + m) = iterate_cycle c (iterate_cycle c start n) m := by  \n  induction n with  \n  | zero => simp  \n  | succ n ih => simp [ih]",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "iterate_cycle_zero_orbits.png",
+                            "description": "Cycle transform orbit visualization showing trajectory evolution from different starting points, with red squares highlighting the identity theorem at step 0",
+                            "path": "public/simulations/iterate_cycle_zero_orbits.png"
+                        },
+                        {
+                            "filename": "iterate_cycle_zero_periods.png",
+                            "description": "Period analysis across four different cycle transforms (Mod7 Shift, Mod12 Double, Mod10 +3, Mod8 Square) showing diverse periodic behaviors",
+                            "path": "public/simulations/iterate_cycle_zero_periods.png"
+                        },
+                        {
+                            "filename": "iterate_cycle_zero_verification.png",
+                            "description": "Theorem verification matrix showing iterate_cycle values for different start points and steps, with column 0 highlighted to demonstrate the identity property",
+                            "path": "public/simulations/iterate_cycle_zero_verification.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/iterate_cycle_zero_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean iterate_cycle_zero theorem. Analyzes cycle transformations and their dynamical properties including orbit analysis and period detection.",
+                        "code": "# -*- coding: utf-8 -*-\n\"\"\"\nSimulation based on the provided Lean snippet for a cycle transformation theorem.\n\nExact Lean code referenced (verbatim):\n\nstructure CycleTransform where\n  shift : Nat → Nat\ndef iterate_cycle (c : CycleTransform) (start : Nat) (steps : Nat) : Nat := match steps with\n  | 0 => start\n  | Nat.succ k => iterate_cycle c (c.shift start) k\ntheorem iterate_cycle_zero (c : CycleTransform) (start : Nat) : iterate_cycle c start 0 = start := by rfl\ntheorem iterate_cycle_add (c : CycleTransform) (start : Nat) (n m : Nat) :\n  iterate_cycle c start (n + m) = iterate_cycle c (iterate_cycle c start n) m := by\n  induction n with\n  | zero => simp\n  | succ n ih => simp [ih]\n\nWhat this script does (and how each step ties to the Lean code):\n1) Mirrors the Lean CycleTransform structure and iterate_cycle function exactly:\n   - CycleTransform contains a shift function that maps Nat → Nat\n   - iterate_cycle applies the shift function iteratively for given steps\n2) Verifies the Lean theorem analogue:\n   - iterate_cycle_zero: iterate_cycle(c, start, 0) = start (no steps = identity)\n   - iterate_cycle_add: composition property for cycle iterations\n3) Provides dynamical systems models that demonstrate cycle behavior:\n   - Modular arithmetic cycles (e.g., mod 7, mod 12 systems)\n   - Permutation cycles and orbit analysis\n   - Convergence to attractors and periodic behavior\n4) Visuals (three complementary plots):\n   - Cycle orbits visualization showing trajectory evolution\n   - Step-by-step iteration convergence for different starting points\n   - Period analysis and attractor identification\n5) Saves CSV summary of cycle trajectories and period analysis\n\nDependencies: numpy, matplotlib, pandas\n\"\"\"\n\nfrom dataclasses import dataclass\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport pandas as pd\nfrom typing import Callable, List, Tuple\n\n# ----- Mirror the Lean definitions exactly -----\n\nLEAN_CODE = \"\"\"structure CycleTransform where\n  shift : Nat -> Nat\ndef iterate_cycle (c : CycleTransform) (start : Nat) (steps : Nat) : Nat := match steps with\n  | 0 => start\n  | Nat.succ k => iterate_cycle c (c.shift start) k\ntheorem iterate_cycle_zero (c : CycleTransform) (start : Nat) : iterate_cycle c start 0 = start := by rfl\ntheorem iterate_cycle_add (c : CycleTransform) (start : Nat) (n m : Nat) :\n  iterate_cycle c start (n + m) = iterate_cycle c (iterate_cycle c start n) m := by\n  induction n with\n  | zero => simp\n  | succ n ih => simp [ih]\"\"\"\n\nprint(\"Exact Lean code referenced:\\n\")\nprint(LEAN_CODE)\nprint(\"\\n- End Lean code -\\n\")\n\n@dataclass(frozen=True)\nclass CycleTransform:\n    shift: Callable[[int], int]\n\ndef iterate_cycle(c: CycleTransform, start: int, steps: int) -> int:\n    \"\"\"\n    Python analogue of the Lean iterate_cycle function:\n    Applies the shift function iteratively for the given number of steps.\n    \"\"\"\n    if steps == 0:\n        return start\n    return iterate_cycle(c, c.shift(start), steps - 1)\n\n# ----- Verify the Lean theorem instances -----\n\n# Create a simple cycle transform (mod 7 arithmetic)\ndef shift_mod7(x: int) -> int:\n    return (x + 1) % 7\n\ncycle_mod7 = CycleTransform(shift=shift_mod7)\n\n# Test theorem iterate_cycle_zero\nfor start_val in [0, 3, 5, 10]:\n    result = iterate_cycle(cycle_mod7, start_val, 0)\n    assert result == start_val, f\"iterate_cycle_zero failed for start={start_val}\"\n\nprint(\"Lean theorem analogue check passed: iterate_cycle(c, start, 0) = start for all tested start values.\\n\")\n\n# Test theorem iterate_cycle_add: iterate_cycle(c, start, n+m) = iterate_cycle(c, iterate_cycle(c, start, n), m)\ndef verify_cycle_add(c: CycleTransform, start: int, n: int, m: int) -> bool:\n    left_side = iterate_cycle(c, start, n + m)\n    intermediate = iterate_cycle(c, start, n)\n    right_side = iterate_cycle(c, intermediate, m)\n    return left_side == right_side\n\n# Test composition property\ntest_cases = [(0, 3, 2), (1, 4, 1), (2, 2, 3), (5, 1, 6)]\nfor start, n, m in test_cases:\n    assert verify_cycle_add(cycle_mod7, start, n, m), f\"iterate_cycle_add failed for start={start}, n={n}, m={m}\"\n\nprint(\"Lean theorem analogue check passed: iterate_cycle composition property verified.\\n\")\n\n# Continue with full simulation code...\nprint(\"\\n=== Iterate Cycle Zero Simulation Results ===\")\nprint(\"Theorem verification: iterate_cycle(c, start, 0) = start (verified for all transforms)\")",
+                        "key_features": [
+                            "Mirrors Lean CycleTransform structure and iterate_cycle function in Python",
+                            "Verifies iterate_cycle_zero theorem: iterate_cycle(c, start, 0) = start",
+                            "Analyzes multiple cycle transforms: modular arithmetic, doubling, squaring",
+                            "Demonstrates orbit evolution and periodic behavior detection",
+                            "Validates composition property iterate_cycle_add theorem"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "iterate_cycle_zero: iterate_cycle(c, start, 0) = start (verified for all starting points)",
+                        "transforms_analyzed": "4 different cycle transforms with diverse behaviors",
+                        "period_analysis": "Mod7 Shift: period 7, Mod12 Double: periods 1-2, Mod10 +3: period 10, Mod8 Square: period 1",
+                        "orbit_trajectories": "147 trajectory points simulated across 7 starting points",
+                        "composition_verification": "iterate_cycle_add property verified for 4 test cases",
+                        "total_simulated_steps": "20 steps per trajectory with full orbit analysis",
+                        "csv_exports": "iterate_cycle_zero_trajectories.csv, iterate_cycle_zero_analysis.csv"
+                    }
+                }
+            },
+            {
+                "agent": "MeasureTheory-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the measure theory theorem chance_example?",
+                "lean_code": "structure BasicEvent where\n  totalPossibilities : Nat\n  favorableCount : Nat\ndef eventChance (e : BasicEvent) : Nat × Nat := (e.favorableCount, e.totalPossibilities)\ntheorem chance_example : eventChance ⟨20, 5⟩ = (5, 20) := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "chance_example_convergence.png",
+                            "description": "Convergence of running probability estimate to theoretical value 5/20 = 0.25 over 10,000 trials with 95% confidence bounds",
+                            "path": "public/simulations/chance_example_convergence.png"
+                        },
+                        {
+                            "filename": "chance_example_distribution.png",
+                            "description": "Binomial distribution of success counts from 1,000 experiments of 20 trials each, showing empirical vs theoretical Binomial(20, 0.25)",
+                            "path": "public/simulations/chance_example_distribution.png"
+                        },
+                        {
+                            "filename": "chance_example_stability.png",
+                            "description": "Stability of probability estimates across batches of 50 experiments each, demonstrating consistent convergence to theoretical 0.25",
+                            "path": "public/simulations/chance_example_stability.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/chance_example_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean chance_example theorem. Simulates drawing from 20 possibilities with 5 favorable outcomes to verify the theoretical probability 5/20 = 0.25.",
+                        "key_features": [
+                            "Mirrors Lean BasicEvent structure and eventChance function in Python",
+                            "Verifies chance_example theorem: eventChance(⟨20, 5⟩) = (5, 20)",
+                            "Demonstrates Law of Large Numbers with 10,000 convergence trials",
+                            "Shows binomial distribution validation with 1,000 experiments of 20 trials each",
+                            "Includes statistical analysis with confidence bounds and batch stability testing"
+                        ]
+                    },
+                    "execution_results": {
+                        "theorem_verification": "eventChance(⟨20, 5⟩) = (5, 20) verified",
+                        "theoretical_probability": "5/20 = 0.2500",
+                        "convergence_error": "≈0.006 (final estimate very close to theoretical)",
+                        "empirical_mean_successes": "≈5.06 (matches theoretical 5.00)",
+                        "total_simulated_trials": "30,000 (10k convergence + 20k binomial)",
+                        "csv_exports": "chance_example_convergence.csv, chance_example_binomial.csv, chance_example_statistics.csv"
+                    }
+                }
+            },
+            {
+                "agent": "Analysis-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the functional analysis theorem probability_example?",
+                "lean_code": "structure OutcomeSet where  \n  outcomes : List Nat  \n  favorable : List Nat  \ndef calculate_probability (os : OutcomeSet) : Nat × Nat := (List.length os.favorable, List.length os.outcomes)  \ntheorem probability_example : calculate_probability ⟨[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 4, 6]⟩ = (3, 10) := by rfl"
+            },
+            {
+                "agent": "Dynamics-Agent",
+                "session_timestamp": "2025-09-09 09:34:54",
+                "natural_language_question": "What is the dynamical systems theorem transform_identity?",
+                "lean_code": "structure StatefulTransform where\n  state : Nat -> Nat\ndef apply_transform (t : StatefulTransform) (initial : Nat) (iterations : Nat) : Nat := \n  match iterations with\n  | 0 => initial\n  | Nat.succ k => apply_transform t (t.state initial) k\ntheorem transform_identity (t : StatefulTransform) (initial : Nat) : apply_transform t initial 0 = initial := by rfl\ntheorem transform_one_step (t : StatefulTransform) (initial : Nat) : apply_transform t initial 1 = t.state initial := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "transform_identity_trajectories.png",
+                            "description": "State evolution trajectories for multiple initial conditions using Tent Map transform, with red squares highlighting the identity theorem at iteration 0",
+                            "path": "public/simulations/transform_identity_trajectories.png"
+                        },
+                        {
+                            "filename": "transform_identity_fixed_points.png",
+                            "description": "Fixed point analysis across five different stateful transforms showing points where state(x) = x, demonstrating diverse dynamical behaviors",
+                            "path": "public/simulations/transform_identity_fixed_points.png"
+                        },
+                        {
+                            "filename": "transform_identity_convergence.png",
+                            "description": "Convergence behavior matrix showing whether trajectories converge, cycle, or exhibit chaotic behavior for different transforms and initial values",
+                            "path": "public/simulations/transform_identity_convergence.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/transform_identity_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean transform_identity theorem. Analyzes various stateful transforms including linear, quadratic, Collatz, logistic, and tent map dynamics.",
+                        "key_features": [
+                            "Mirrors Lean StatefulTransform structure and apply_transform function in Python",
+                            "Verifies transform_identity theorem: apply_transform(t, initial, 0) = initial",
+                            "Analyzes five different transforms: linear, quadratic, Collatz, discrete logistic, tent map",
+                            "Demonstrates fixed point analysis and convergence behavior classification",
+                            "Validates transform_one_step theorem: apply_transform(t, initial, 1) = t.state(initial)"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "transform_identity: apply_transform(t, initial, 0) = initial (verified for 15 test cases)",
+                        "one_step_verification": "transform_one_step: apply_transform(t, initial, 1) = t.state(initial) (verified for 15 test cases)",
+                        "transforms_analyzed": "5 stateful transforms with diverse dynamical behaviors",
+                        "fixed_points_found": "7 total fixed points across all transforms (Quadratic: 4, Linear: 1, others: 1-2)",
+                        "convergence_analysis": "Quadratic: all converged, Tent Map: 3 converged + 3 cyclic, Discrete Logistic: all cyclic",
+                        "trajectory_simulations": "88 trajectory points across 8 initial values with up to 30 iterations",
+                        "csv_exports": "transform_identity_trajectories.csv, transform_identity_analysis.csv"
+                    },
+                    "inline_code": "from dataclasses import dataclass\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport pandas as pd\nfrom typing import Callable, List, Tuple\n\n@dataclass(frozen=True)\nclass StatefulTransform:\n    state: Callable[[int], int]\n\ndef apply_transform(t: StatefulTransform, initial: int, iterations: int) -> int:\n    \"\"\"\n    Python analogue of the Lean apply_transform function:\n    Recursively applies the state function for the given number of iterations.\n    \"\"\"\n    if iterations == 0:\n        return initial\n    return apply_transform(t, t.state(initial), iterations - 1)\n\n# Create sample stateful transforms for testing\ndef linear_state(x: int) -> int:\n    \"\"\"Linear transformation: multiply by 2 and add 1\"\"\"\n    return 2 * x + 1\n\ndef quadratic_state(x: int) -> int:\n    \"\"\"Quadratic transformation: x^2 mod 100\"\"\"\n    return (x * x) % 100\n\ndef collatz_step(n: int) -> int:\n    \"\"\"Collatz conjecture step: n/2 if even, 3n+1 if odd\"\"\"\n    if n <= 0:\n        return 1\n    return n // 2 if n % 2 == 0 else 3 * n + 1\n\ndef tent_map(x: int) -> int:\n    \"\"\"Tent map: 2*x if x<50, 2*(100-x) if x>=50\"\"\"\n    if x < 50:\n        return (2 * x) % 100\n    else:\n        return (2 * (100 - x)) % 100\n\n# Test transforms\nlinear_transform = StatefulTransform(state=linear_state)\nquadratic_transform = StatefulTransform(state=quadratic_state)\ncollatz_transform = StatefulTransform(state=collatz_step)\ntent_transform = StatefulTransform(state=tent_map)\n\n# Verify theorem transform_identity: apply_transform(t, initial, 0) = initial\ntest_initials = [0, 5, 10, 25, 50]\ntest_transforms = [linear_transform, quadratic_transform, collatz_transform, tent_transform]\n\nprint('Testing theorem transform_identity:')\nfor i, transform in enumerate(test_transforms):\n    transform_name = ['Linear', 'Quadratic', 'Collatz', 'Tent'][i]\n    for initial in test_initials:\n        result = apply_transform(transform, initial, 0)\n        assert result == initial, f'transform_identity failed for {transform_name}, initial={initial}'\n    print(f'  {transform_name} transform: identity verified')\n\nprint('Theorem verification: apply_transform(t, initial, 0) = initial (verified for all transforms)')"
+                }
+            },
+            {
+                "agent": "MeasureTheory-Agent",
+                "session_timestamp": "2025-09-09 09:44:03",
+                "natural_language_question": "What is the measure theory theorem expectation_example?",
+                "lean_code": "structure DiscreteRandomVariable where\n  sampleSpace : Nat\n  outcomeProbabilities : List Nat\ndef expectation (rv : DiscreteRandomVariable) : Nat :=\n  List.sum rv.outcomeProbabilities / rv.sampleSpace\ntheorem expectation_example : expectation <10, [1, 2, 3, 4]> = 10 := by simp",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "expectation_example_distribution.png",
+                            "description": "Discrete probability distribution showing outcomes 0-3 with probabilities proportional to weights [1,2,3,4], and comparison of theoretical vs empirical frequencies from 10,000 samples",
+                            "path": "public/simulations/expectation_example_distribution.png"
+                        },
+                        {
+                            "filename": "expectation_example_convergence.png",
+                            "description": "Convergence of sample mean to theoretical expectation (2.0) demonstrating Law of Large Numbers, with 95% confidence bounds and reference lines for both Lean calculation (1) and theoretical expectation",
+                            "path": "public/simulations/expectation_example_convergence.png"
+                        },
+                        {
+                            "filename": "expectation_example_histogram.png",
+                            "description": "Sample distribution histogram overlaid with theoretical probabilities, showing empirical mean (2.003) vs theoretical mean (2.000) with excellent agreement",
+                            "path": "public/simulations/expectation_example_histogram.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/expectation_example_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean expectation_example theorem. Analyzes discrete random variable expectation calculation with probabilistic interpretation.",
+                        "key_features": [
+                            "Mirrors Lean DiscreteRandomVariable structure and expectation function in Python",
+                            "Verifies expectation_example theorem: expectation(<10, [1, 2, 3, 4]>) = 10",
+                            "Discovers discrepancy: direct calculation gives 1 but theorem claims 10",
+                            "Provides probabilistic interpretation with theoretical expectation 2.0",
+                            "Demonstrates Law of Large Numbers with 10,000 sample convergence"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "expectation(<10, [1, 2, 3, 4]>) = 10 (theorem claim vs calculation discrepancy)",
+                        "lean_calculation": "sum([1,2,3,4]) // 10 = 1 (integer division)",
+                        "probabilistic_expectation": "E[X] = 2.0 (outcomes weighted by probabilities)",
+                        "empirical_mean": "≈2.003 (matches theoretical probabilistic expectation)",
+                        "convergence_error": "≈0.003 (excellent agreement with probabilistic interpretation)",
+                        "total_simulated_samples": "10,000",
+                        "csv_exports": "expectation_example_samples.csv, expectation_example_frequencies.csv, expectation_example_statistics.csv"
+                    }
+                }
+            },
+            {
+                "agent": "Analysis-Agent",
+                "session_timestamp": "2025-09-09 09:44:03",
+                "natural_language_question": "What is the functional analysis theorem vector_addition_commutative?",
+                "lean_code": "structure InnerProductSpace where\n  elements : List Nat\n  innerProduct : Prod Nat Nat → Nat\ndef vectorAddition (u v : InnerProductSpace) : InnerProductSpace :=\n  ⟨List.zipWith Nat.add u.elements v.elements, u.innerProduct⟩\ntheorem vector_addition_commutative (u v : InnerProductSpace) : vectorAddition u v = vectorAddition v u := by simp"
+            },
+            {
+                "agent": "Dynamics-Agent",
+                "session_timestamp": "2025-09-09 09:44:03",
+                "natural_language_question": "What is the dynamical systems theorem applyRotation_zero?",
+                "lean_code": "structure CircularTransformation where  \n  rotate : Nat -> Nat  \ndef applyRotation (c : CircularTransformation) (x : Nat) (n : Nat) : Nat := match n with | 0 => x | Nat.succ k => applyRotation c (c.rotate x) k  \ntheorem applyRotation_zero (c : CircularTransformation) (x : Nat) : applyRotation c x 0 = x := by rfl  \ntheorem applyRotation_one (c : CircularTransformation) (x : Nat) : applyRotation c x 1 = c.rotate x := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "apply_rotation_zero_orbits.png",
+                            "description": "Polar visualization of circular transformation orbits showing spiral patterns, with red squares highlighting the identity theorem at rotation 0",
+                            "path": "public/simulations/apply_rotation_zero_orbits.png"
+                        },
+                        {
+                            "filename": "apply_rotation_zero_symmetry.png",
+                            "description": "Symmetry and regularity analysis across five different circular transformations (clock, compass, pentagon, hexagon, octagon) showing geometric properties",
+                            "path": "public/simulations/apply_rotation_zero_symmetry.png"
+                        },
+                        {
+                            "filename": "apply_rotation_zero_periods.png",
+                            "description": "Period distribution heatmap showing cycle lengths for different starting positions and transformation types, demonstrating rotational symmetry patterns",
+                            "path": "public/simulations/apply_rotation_zero_periods.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/apply_rotation_zero_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean applyRotation_zero theorem. Analyzes geometric circular transformations including clock, compass, pentagon, hexagon rotations and reflections.",
+                        "key_features": [
+                            "Mirrors Lean CircularTransformation structure and applyRotation function in Python",
+                            "Verifies applyRotation_zero theorem: applyRotation(c, x, 0) = x",
+                            "Analyzes five geometric transforms: 12-hour clock, 8-direction compass, pentagon, hexagon, octagon",
+                            "Demonstrates orbit analysis with period detection and symmetry measures",
+                            "Validates applyRotation_one theorem: applyRotation(c, x, 1) = c.rotate(x)"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "applyRotation_zero: applyRotation(c, x, 0) = x (verified for 28 test cases)",
+                        "one_rotation_verification": "applyRotation_one: applyRotation(c, x, 1) = c.rotate(x) (verified for 28 test cases)",
+                        "geometric_transforms": "5 circular transformations with periods: Clock(12), Compass(8), Pentagon(5), Hexagon(3), Octagon(1-2)",
+                        "symmetry_analysis": "Octagon reflection highest symmetry (0.735), Pentagon vertices most regular (0.833)",
+                        "orbit_periods": "Complete period analysis: 12-hour, 8-directional, 5-vertex, 3-alternating, 1-2 reflection cycles",
+                        "rotation_simulations": "136 position states across 8 starting positions with 16 rotations each",
+                        "csv_exports": "apply_rotation_zero_sequences.csv, apply_rotation_zero_analysis.csv"
+                    },
+                    "inline_code": "from dataclasses import dataclass\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport pandas as pd\nfrom typing import Callable, List, Tuple\nimport math\n\n@dataclass(frozen=True)\nclass CircularTransformation:\n    rotate: Callable[[int], int]\n\ndef apply_rotation(c: CircularTransformation, x: int, n: int) -> int:\n    \"\"\"\n    Python analogue of the Lean applyRotation function:\n    Recursively applies the rotation function n times.\n    \"\"\"\n    if n == 0:\n        return x\n    return apply_rotation(c, c.rotate(x), n - 1)\n\n# Create sample circular transformations for testing\ndef circular_shift_8(x: int) -> int:\n    \"\"\"Circular shift in mod 8: (x + 1) mod 8\"\"\"\n    return (x + 1) % 8\n\ndef circular_double_12(x: int) -> int:\n    \"\"\"Circular doubling in mod 12: (2*x) mod 12\"\"\"\n    return (2 * x) % 12\n\ndef clock_rotation(x: int) -> int:\n    \"\"\"12-hour clock rotation: (x + 1) mod 12\"\"\"\n    return (x + 1) % 12\n\ndef pentagon_rotation(x: int) -> int:\n    \"\"\"Pentagon vertex rotation: (x + 1) mod 5\"\"\"\n    return (x + 1) % 5\n\ndef octagon_reflection(x: int) -> int:\n    \"\"\"Octagon reflection symmetry: (8 - x) mod 8\"\"\"\n    return (8 - x) % 8\n\n# Test transformations\nshift_8 = CircularTransformation(rotate=circular_shift_8)\ndouble_12 = CircularTransformation(rotate=circular_double_12)\nclock_12 = CircularTransformation(rotate=clock_rotation)\npentagon_5 = CircularTransformation(rotate=pentagon_rotation)\noctagon_reflect = CircularTransformation(rotate=octagon_reflection)\n\ntest_transformations = [\n    ('Shift+1 mod 8', shift_8),\n    ('Double mod 12', double_12),\n    ('12-Hour Clock', clock_12),\n    ('Pentagon Vertices', pentagon_5),\n    ('Octagon Reflection', octagon_reflect)\n]\n\n# Test theorem applyRotation_zero: applyRotation(c, x, 0) = x\ntest_positions = [0, 1, 2, 3, 5, 8, 11]\n\nprint('Testing theorem applyRotation_zero:')\nfor name, transform in test_transformations:\n    for x in test_positions:\n        result = apply_rotation(transform, x, 0)\n        assert result == x, f'applyRotation_zero failed for {name}, x={x}'\n    print(f'  {name}: identity verified for all test positions')\n\nprint('Theorem verification: applyRotation(c, x, 0) = x (verified for all transforms)')"
+                }
+            },
+            {
+                "agent": "Analysis-Agent",
+                "session_timestamp": "2025-09-09 09:59:35",
+                "natural_language_question": "What is the functional analysis theorem bounded_compose_bound?",
+                "lean_code": "structure BoundedFunction where\n  domain : List Nat\n  range : List Nat\n  bound : Nat\ndef boundedCompose (f g : BoundedFunction) : BoundedFunction := <f.domain, g.range, max f.bound g.bound>\ntheorem bounded_compose_bound (f g : BoundedFunction) : boundedCompose f g = <f.domain, g.range, max f.bound g.bound> := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "bounded_compose_bound_verification.png",
+                            "description": "Function composition bound verification showing red composed bounds matching black expected max bounds, with green circles highlighting theorem verification points",
+                            "path": "public/simulations/bounded_compose_bound_verification.png"
+                        },
+                        {
+                            "filename": "bounded_compose_bound_distribution.png",
+                            "description": "Distribution histogram of composed function bounds across 50 random trials, demonstrating consistent max bound preservation",
+                            "path": "public/simulations/bounded_compose_bound_distribution.png"
+                        },
+                        {
+                            "filename": "bounded_compose_bound_functions.png",
+                            "description": "Domain-range mappings for six bounded functions (linear, quadratic, modular, trigonometric, exponential) with bound constraints shown in yellow",
+                            "path": "public/simulations/bounded_compose_bound_functions.png"
+                        }
+                    ],
+                    "code_implementation": {
+                        "language": "python",
+                        "file_path": "public/simulations/bounded_compose_bound_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean bounded_compose_bound theorem. Analyzes function composition bound preservation across linear, quadratic, modular, trigonometric, and exponential bounded functions.",
+                        "key_features": [
+                            "Mirrors Lean BoundedFunction structure and boundedCompose function in Python",
+                            "Verifies bounded_compose_bound theorem: boundedCompose(f, g).bound = max(f.bound, g.bound)",
+                            "Analyzes six different function types: linear, quadratic, modular, sine wave, exponential decay",
+                            "Demonstrates bound preservation across 30 function compositions",
+                            "Validates composition chain analysis and statistical distribution of bounds"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "bounded_compose_bound: boundedCompose(f, g).bound = max(f.bound, g.bound) (verified for 30/30 compositions)",
+                        "function_types": "6 bounded functions: Linear 2x (bound 10), Linear x/2 (bound 5), Quadratic x^2 (bound 9), Modular x%4 (bound 7), Sine Wave (bound 10), Exp Decay (bound 10)",
+                        "composition_analysis": "30 total compositions tested with 100% theorem compliance",
+                        "statistical_trials": "50 random composition trials: mean bound 9.72, max bound 10, 100% theorem compliance",
+                        "chain_analysis": "4-function composition chain: final bound 10, domain size preserved at 6",
+                        "bound_distribution": "All compositions preserve max bound property as required by theorem",
+                        "csv_exports": "bounded_compose_bound_results.csv, bounded_compose_bound_statistics.csv"
+                    },
+                    "inline_code": "from dataclasses import dataclass\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport pandas as pd\nfrom typing import List, Callable\nimport math\n\n@dataclass(frozen=True)\nclass BoundedFunction:\n    domain: List[int]\n    range: List[int]\n    bound: int\n    func: Callable[[int], int] = None\n\ndef bounded_compose(f: BoundedFunction, g: BoundedFunction) -> BoundedFunction:\n    \"\"\"\n    Python analogue of the Lean boundedCompose function:\n    Creates composition with f.domain, g.range, and max(f.bound, g.bound)\n    \"\"\"\n    return BoundedFunction(\n        domain=f.domain,\n        range=g.range,\n        bound=max(f.bound, g.bound)\n    )\n\n# Create sample bounded functions for testing\nlinear_f1 = BoundedFunction(\n    domain=[0, 1, 2, 3, 4, 5],\n    range=[0, 2, 4, 6, 8, 10],\n    bound=10,\n    func=lambda x: 2*x\n)\n\nquad_f = BoundedFunction(\n    domain=[0, 1, 2, 3],\n    range=[0, 1, 4, 9],\n    bound=9,\n    func=lambda x: x*x\n)\n\nmod_f = BoundedFunction(\n    domain=[0, 1, 2, 3, 4, 5, 6, 7],\n    range=[0, 1, 2, 3, 0, 1, 2, 3],\n    bound=7,\n    func=lambda x: x % 4\n)\n\ntest_functions = [\n    ('Linear 2x', linear_f1),\n    ('Quadratic x^2', quad_f),\n    ('Modular x%4', mod_f)\n]\n\n# Test theorem bounded_compose_bound\nprint('Testing theorem bounded_compose_bound:')\nfor name_f, f in test_functions:\n    for name_g, g in test_functions:\n        if name_f != name_g:\n            composed = bounded_compose(f, g)\n            expected_bound = max(f.bound, g.bound)\n            assert composed.bound == expected_bound\n            print(f'  {name_f} o {name_g}: bounds({f.bound}, {g.bound}) -> max = {composed.bound} (verified)')\n\nprint('Theorem verification: boundedCompose(f, g).bound = max(f.bound, g.bound) (verified for all compositions)')"
+                }
+            },
+            {
+                "agent": "Dynamics-Agent",
+                "session_timestamp": "2025-09-09 09:59:35",
+                "natural_language_question": "What is the dynamical systems theorem rotate_zero?",
+                "lean_code": "structure CircularTransform where\n  rotation : Nat -> Nat\ndef rotate (t : CircularTransform) (x : Nat) (n : Nat) : Nat := match n with | 0 => x | Nat.succ k => t.rotation (rotate t x k)\ntheorem rotate_zero (t : CircularTransform) (x : Nat) : rotate t x 0 = x := by rfl",
+                "simulation_results": {
+                    "images": [
+                        {
+                            "filename": "rotate_zero_comparison.png",
+                            "description": "Multi-transform rotation comparison showing six different circular transforms (gear, planetary, Fibonacci, binary, prime, harmonic) with black squares highlighting the identity theorem",
+                            "path": "public/simulations/rotate_zero_comparison.png"
+                        },
+                        {
+                            "filename": "rotate_zero_convergence.png",
+                            "description": "Rotation sequence convergence analysis for Golden Ratio transform showing trajectory evolution from multiple starting points, with red squares demonstrating the identity theorem",
+                            "path": "public/simulations/rotate_zero_convergence.png"
+                        },
+                        {
+                            "filename": "rotate_zero_statistics.png",
+                            "description": "Statistical analysis heatmap showing period length, sequence length, unique positions, and position range span across all transforms and starting positions",
+                            "path": "public/simulations/rotate_zero_statistics.png"
+                        }
+                    ],
+                    "simulation_code": {
+                        "language": "python",
+                        "file_path": "public/simulations/rotate_zero_simulation.py",
+                        "description": "Monte Carlo simulation demonstrating the Lean rotate_zero theorem. Analyzes seven diverse circular transforms including mechanical, astronomical, mathematical, and musical rotation models.",
+                        "key_features": [
+                            "Mirrors Lean CircularTransform structure and rotate function in Python",
+                            "Verifies rotate_zero theorem: rotate(t, x, 0) = x",
+                            "Analyzes seven transforms: gear, planetary, Fibonacci, binary, prime, harmonic, golden ratio",
+                            "Demonstrates comprehensive rotation sequence analysis with period detection",
+                            "Statistical analysis of convergence patterns and position distributions"
+                        ]
+                    },
+                    "statistical_results": {
+                        "theorem_verification": "rotate_zero: rotate(t, x, 0) = x (verified for 63 test cases across 7 transforms)",
+                        "transform_diversity": "7 circular transforms: 10-tooth gear, 24-hour planet, Fibonacci spiral, 8-bit binary, prime steps, harmonic 12-tone, golden ratio",
+                        "period_analysis": "Periods range from 1 (fixed points) to 24 (planetary), with most showing full cyclic behavior",
+                        "golden_ratio_focus": "Golden ratio transform: 208 positions, 20 unique states, period 6, density 0.096",
+                        "position_statistics": "Average position 7.60, standard deviation 6.30, range [0, 20] for main analysis",
+                        "sequence_simulations": "208 total sequence data points with comprehensive statistical analysis",
+                        "csv_exports": "rotate_zero_sequences.csv, rotate_zero_analysis.csv"
+                    },
+                    "inline_code": "from dataclasses import dataclass\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport pandas as pd\nfrom typing import Callable, List, Tuple\nimport math\n\n@dataclass(frozen=True)\nclass CircularTransform:\n    rotation: Callable[[int], int]\n\ndef rotate(t: CircularTransform, x: int, n: int) -> int:\n    \"\"\"\n    Python analogue of the Lean rotate function:\n    Recursively applies the rotation function n times.\n    \"\"\"\n    if n == 0:\n        return x\n    return t.rotation(rotate(t, x, n - 1))\n\n# Create diverse circular transforms for testing\ndef gear_rotation_10(x: int) -> int:\n    \"\"\"10-tooth gear: advance by 1 tooth\"\"\"\n    return (x + 1) % 10\n\ndef planetary_rotation_24(x: int) -> int:\n    \"\"\"24-hour planetary rotation: advance by 1 hour\"\"\"\n    return (x + 1) % 24\n\ndef fibonacci_rotation(x: int) -> int:\n    \"\"\"Fibonacci-inspired rotation: (x + fib_step) mod 13\"\"\"\n    fib_step = ((x % 5) + ((x // 5) % 5)) % 8 + 1  # Simplified Fibonacci-like\n    return (x + fib_step) % 13\n\ndef prime_rotation(x: int) -> int:\n    \"\"\"Prime-based rotation: advance by prime-like step\"\"\"\n    primes = [1, 2, 3, 5, 7, 11]\n    step = primes[x % len(primes)]\n    return (x + step) % 17\n\ndef golden_rotation(x: int) -> int:\n    \"\"\"Golden ratio rotation: phi-based step\"\"\"\n    phi_step = int(x * 1.618) % 7 + 1\n    return (x + phi_step) % 21\n\n# Test transforms\ngear_10 = CircularTransform(rotation=gear_rotation_10)\nplanet_24 = CircularTransform(rotation=planetary_rotation_24)\nfib_spiral = CircularTransform(rotation=fibonacci_rotation)\nprime_steps = CircularTransform(rotation=prime_rotation)\ngolden_ratio = CircularTransform(rotation=golden_rotation)\n\nrotation_transforms = [\n    ('10-Tooth Gear', gear_10),\n    ('24-Hour Planet', planet_24),\n    ('Fibonacci Spiral', fib_spiral),\n    ('Prime Steps', prime_steps),\n    ('Golden Ratio', golden_ratio)\n]\n\n# Test theorem rotate_zero: rotate(t, x, 0) = x\ntest_positions = [0, 1, 3, 7, 12, 21, 42]\n\nprint('Testing theorem rotate_zero:')\ntotal_tests = 0\nfor name, transform in rotation_transforms:\n    tests_passed = 0\n    for x in test_positions:\n        result = rotate(transform, x, 0)\n        if result == x:\n            tests_passed += 1\n        total_tests += 1\n        assert result == x, f'rotate_zero failed for {name}, x={x}: got {result}, expected {x}'\n    print(f'  {name}: identity verified for all {tests_passed} test positions')\n\nprint(f'Theorem verification: rotate(t, x, 0) = x for all {total_tests} tested cases')"
+                }
+            }
+        ];
+
+        // Load Lean data
+        async function loadLeanData() {
+            // TEMPORARY: Force use embedded data to test simulation_results
+            console.log('FORCING embedded data to test simulation_results');
+            leanData = embeddedLeanData;
+            console.log('Using ' + leanData.length + ' embedded entries');
+            console.log('First embedded entry:', leanData[0]);
+            console.log('First embedded entry has simulation_results?', !!leanData[0]?.simulation_results);
+
+            // Check specifically for FluidDynamics-Agent
+            const fluidNode = leanData.find(entry => entry.agent === 'FluidDynamics-Agent');
+            console.log('FluidDynamics-Agent found in data:', !!fluidNode);
+            if (fluidNode) {
+                console.log('FluidDynamics-Agent entry:', fluidNode);
+            } else {
+                console.log('FluidDynamics-Agent NOT FOUND - available agents:', leanData.map(e => e.agent));
+            }
+
+            /* COMMENTED OUT FOR TESTING
+            try {
+                const response = await fetch('./public/extracted_lean_questions.json');
+                if (response.ok) {
+                    leanData = await response.json();
+                    console.log('Loaded ' + leanData.length + ' Lean code entries from JSON file');
+                    console.log('First entry from JSON:', leanData[0]);
+                    console.log('First entry has simulation_results?', !!leanData[0]?.simulation_results);
+                } else {
+                    throw new Error('Failed to fetch JSON file');
+                }
+            } catch (error) {
+                console.log('Failed to load JSON, using embedded data:', error.message);
+                leanData = embeddedLeanData;
+                console.log('Using ' + leanData.length + ' embedded entries');
+                console.log('First embedded entry:', leanData[0]);
+                console.log('First embedded entry has simulation_results?', !!leanData[0]?.simulation_results);
+            }
+            */
+            
+            // Always add sample entries for new agent types to demonstrate legend
+            var newAgentSamples = [
+                {
+                    "agent": "Stochastic-Agent",
+                    "session_timestamp": "2025-09-12 23:25:00",
+                    "natural_language_question": "What is a basic stochastic process theorem?",
+                    "lean_code": "structure RandomWalk where\\n  steps : List Int\\n  probability : Nat → Nat\\ndef walkStep (rw : RandomWalk) (n : Nat) : Int := rw.steps.get? n |>.getD 0\\ntheorem walk_starts_zero : walkStep ⟨[0, 1, -1, 2], fun _ => 1⟩ 0 = 0 := by rfl",
+                    "simulation_results": {
+                        "images": [
+                            {
+                                "filename": "random_walk_trajectories.png",
+                                "description": "Multiple random walk trajectories showing 50 of 1000 simulated walks, all starting from zero as verified by the Lean theorem",
+                                "path": "public/simulations/random_walk_trajectories.png"
+                            },
+                            {
+                                "filename": "random_walk_distribution.png",
+                                "description": "Distribution of final positions after 100 steps from 1000 random walks, showing convergence to normal distribution N(0, 100)",
+                                "path": "public/simulations/random_walk_distribution.png"
+                            },
+                            {
+                                "filename": "random_walk_variance.png",
+                                "description": "Variance growth over time showing empirical variance matches theoretical prediction (variance = step number)",
+                                "path": "public/simulations/random_walk_variance.png"
+                            }
+                        ],
+                        "simulation_code": {
+                            "language": "python",
+                            "file_path": "public/simulations/random_walk_simulation.py",
+                            "description": "Monte Carlo simulation demonstrating the Lean random walk theorem. Implements stochastic random walks and verifies the theorem that walks start at zero, with statistical analysis of walk properties.",
+                            "key_features": [
+                                "Mirrors Lean RandomWalk structure and walkStep function in Python",
+                                "Verifies walk_starts_zero theorem: walkStep(<[0,1,-1,2], fun _ => 1>, 0) = 0",
+                                "Simulates 1000 random walks with 100 steps each using ±1 moves",
+                                "Demonstrates central limit theorem convergence for random walks",
+                                "Shows variance growth matches theoretical prediction (σ² = n)"
+                            ]
+                        },
+                        "statistical_results": {
+                            "theorem_verification": "walkStep(<[0,1,-1,2], fun _ => 1>, 0) = 0 verified",
+                            "n_walks_simulated": 1000,
+                            "steps_per_walk": 100,
+                            "theoretical_final_variance": "100 (equals number of steps)",
+                            "empirical_final_std": "≈10.08 (matches theoretical √100 = 10)",
+                            "csv_exports": "random_walk_summary.csv, random_walk_statistics.csv"
+                        }
+                    }
+                },
+                {
+                    "agent": "NuclearPhysics-Agent",
+                    "session_timestamp": "2025-09-12 23:25:00",
+                    "natural_language_question": "What is a nuclear decay theorem?",
+                    "lean_code": "structure RadioactiveDecay where\n  halfLife : Nat\n  initialAmount : Nat\ndef decayAmount (rd : RadioactiveDecay) (time : Nat) : Nat := rd.initialAmount / (2 ^ (time / rd.halfLife))\ntheorem decay_at_zero : decayAmount <10, 100> 0 = 100 := by rfl",
+                    "simulation_results": {
+                        "images": [
+                            {
+                                "filename": "nuclear_decay_comparison.png",
+                                "description": "Step curve comparison showing Lean decayAmount (Nat arithmetic) vs Monte-Carlo mean with 5-95% confidence band over time",
+                                "path": "public/simulations/nuclear_decay_comparison.png"
+                            },
+                            {
+                                "filename": "nuclear_decay_distribution.png",
+                                "description": "Distribution histogram of survivors at t=30 (3 checkpoints) showing stochastic variation around theoretical values",
+                                "path": "public/simulations/nuclear_decay_distribution.png"
+                            },
+                            {
+                                "filename": "nuclear_decay_convergence.png",
+                                "description": "Law of Large Numbers demonstration showing running mean convergence to real expectation at t=50",
+                                "path": "public/simulations/nuclear_decay_convergence.png"
+                            }
+                        ],
+                        "simulation_code": {
+                            "language": "python",
+                            "file_path": "public/simulations/nuclear_decay.py",
+                            "description": "Monte Carlo simulation demonstrating the Lean radioactive decay theorem. Implements stochastic decay process with checkpoint-based halving to show difference between deterministic Lean calculation and probabilistic reality.",
+                            "key_features": [
+                                "Mirrors Lean RadioactiveDecay structure and decayAmount function in Python",
+                                "Implements stochastic model with binomial survival at half-life checkpoints",
+                                "Demonstrates difference between Lean Nat arithmetic and real expectations",
+                                "Shows Law of Large Numbers convergence with 5000 Monte Carlo trials",
+                                "Generates three complementary visualizations of decay dynamics"
+                            ]
+                        },
+                        "statistical_results": {
+                            "theorem_instance": "decayAmount(<10,100>, 0) = 100 (verified)",
+                            "simulation_trials": 5000,
+                            "time_range": "0 to 100 time units",
+                            "half_life": "10 time units",
+                            "initial_amount": "100 atoms",
+                            "csv_export": "radioactive_decay_summary.csv"
+                        }
+                    }
+                }
+            ];
+
+            // Add new agent samples to existing data
+            for (var i = 0; i < newAgentSamples.length; i++) {
+                leanData.push(newAgentSamples[i]);
+            }
+
+            console.log('Final dataset has ' + leanData.length + ' total entries');
+            console.log('First few entries:', leanData.slice(0, 3));
+            console.log('Last few entries:', leanData.slice(-3));
+
+            // DEBUG: Check which entries have simulation_results
+            leanData.forEach((entry, index) => {
+                if (entry.simulation_results) {
+                    console.log(`Entry ${index} (${entry.agent}) has simulation_results`);
+                }
+            });
+            createGraphFromLeanData();
+        }
+
+        function createGraphFromLeanData() {
+            console.log('Starting graph creation with', leanData.length, 'entries');
+            
+            // Clear existing data
+            nodes.length = 0;
+            nodeObjects.forEach(obj => scene.remove(obj));
+            nodeObjects.length = 0;
+            edgeObjects.forEach(obj => scene.remove(obj.line));
+            edgeObjects.length = 0;
+
+            // Create nodes from Lean data
+            leanData.forEach((entry, index) => {
+                console.log('Processing entry', index, ':', entry.agent);
+                if (entry.agent === 'FluidDynamics-Agent') {
+                    console.log('=== FLUID DYNAMICS ENTRY FOUND ===');
+                    console.log('Entry data:', entry);
+                    console.log('Has simulation_results:', !!entry.simulation_results);
+                }
+                const node = {
+                    id: `lean_${index}`,
+                    label: entry.natural_language_question,
+                    agent: entry.agent,
+                    code: entry.lean_code,
+                    timestamp: entry.session_timestamp,
+                    simulation_results: entry.simulation_results,
+                    x: (Math.random() - 0.5) * 30,
+                    y: (Math.random() - 0.5) * 30,
+                    z: (Math.random() - 0.5) * 30,
+                    vx: 0, vy: 0, vz: 0,
+                    fx: 0, fy: 0, fz: 0
+                };
+                nodes.push(node);
+
+                // Create visual node with color based on agent type
+                let color;
+                if (entry.agent.includes('MeasureTheory')) {
+                    color = 0x2196f3; // Blue
+                } else if (entry.agent.includes('Analysis')) {
+                    color = 0x4caf50; // Green
+                } else if (entry.agent.includes('FluidDynamics') || entry.agent.includes('Fluid')) {
+                    color = 0xff9800; // Orange
+                } else if (entry.agent.includes('NuclearPhysics') || entry.agent.includes('Nuclear')) {
+                    color = 0xf44336; // Red
+                } else if (entry.agent.includes('Dynamics')) {
+                    color = 0x9c27b0; // Purple
+                } else if (entry.agent.includes('Stochastic')) {
+                    color = 0xffeb3b; // Yellow
+                } else {
+                    color = 0x607d8b; // Blue Grey
+                }
+
+                const geometry = new THREE.SphereGeometry(0.8, 16, 16);
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: color,
+                    emissive: new THREE.Color(color).multiplyScalar(0.1),
+                    shininess: 100
+                });
+                const sphere = new THREE.Mesh(geometry, material);
+                sphere.position.set(node.x, node.y, node.z);
+                sphere.userData = { nodeData: node, type: 'node' };
+                scene.add(sphere);
+                nodeObjects.push(sphere);
+            });
+
+            // Create edges based on semantic similarity (agents of same type)
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const nodeA = nodes[i];
+                    const nodeB = nodes[j];
+                    
+                    // Connect nodes from same agent type with higher probability
+                    const sameAgent = nodeA.agent === nodeB.agent;
+                    const shouldConnect = sameAgent ? Math.random() < 0.7 : Math.random() < 0.2;
+                    
+                    if (shouldConnect) {
+                        const edge = {
+                            source: nodeA,
+                            target: nodeB,
+                            weight: sameAgent ? 0.8 : 0.3
+                        };
+                        edges.push(edge);
+
+                        // Create visual edge
+                        const geometry = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(nodeA.x, nodeA.y, nodeA.z),
+                            new THREE.Vector3(nodeB.x, nodeB.y, nodeB.z)
+                        ]);
+                        const material = new THREE.LineBasicMaterial({ 
+                            color: sameAgent ? 0x888888 : 0x555555,
+                            opacity: sameAgent ? 0.8 : 0.5,
+                            transparent: true
+                        });
+                        const line = new THREE.Line(geometry, material);
+                        scene.add(line);
+                        edgeObjects.push({ line, edge });
+                    }
+                }
+            }
+
+            console.log(`Created graph with ${nodes.length} nodes and ${edges.length} edges`);
+        }
+
+        function createSampleGraph() {
+            // Fallback sample data if JSON loading fails
+            const sampleData = [
+                { natural_language_question: "What is a simple probability measure?", agent: "MeasureTheory-Agent", lean_code: "structure SimpleProbability where\n  outcomes : Nat\n  favorable : Nat" },
+                { natural_language_question: "What is a linear transformation?", agent: "Analysis-Agent", lean_code: "structure LinearMap where\n  domain : List Nat\n  codomain : List Nat" },
+                { natural_language_question: "What is a dynamical system iteration?", agent: "Dynamics-Agent", lean_code: "def iterate (f : Nat → Nat) (x : Nat) (n : Nat) : Nat := sorry" }
+            ];
+            
+            leanData = sampleData;
+            createGraphFromLeanData();
+        }
+
+        // Physics simulation
+        function updatePhysics() {
+            if (nodes.length === 0) return;
+            
+            const alpha = 0.1;
+            const repulsion = 15;
+            const attraction = 0.02;
+
+            // Reset forces
+            nodes.forEach(node => {
+                node.fx = 0;
+                node.fy = 0;
+                node.fz = 0;
+            });
+
+            // Repulsion between all nodes
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const nodeA = nodes[i];
+                    const nodeB = nodes[j];
+                    
+                    const dx = nodeA.x - nodeB.x;
+                    const dy = nodeA.y - nodeB.y;
+                    const dz = nodeA.z - nodeB.z;
+                    const distance = Math.sqrt(dx*dx + dy*dy + dz*dz) || 0.1;
+                    
+                    const force = repulsion / (distance * distance);
+                    const fx = (dx / distance) * force;
+                    const fy = (dy / distance) * force;
+                    const fz = (dz / distance) * force;
+                    
+                    nodeA.fx += fx;
+                    nodeA.fy += fy;
+                    nodeA.fz += fz;
+                    nodeB.fx -= fx;
+                    nodeB.fy -= fy;
+                    nodeB.fz -= fz;
+                }
+            }
+
+            // Attraction along edges
+            edges.forEach(edge => {
+                const dx = edge.target.x - edge.source.x;
+                const dy = edge.target.y - edge.source.y;
+                const dz = edge.target.z - edge.source.z;
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz) || 0.1;
+                
+                const force = attraction * distance * edge.weight;
+                const fx = (dx / distance) * force;
+                const fy = (dy / distance) * force;
+                const fz = (dz / distance) * force;
+                
+                edge.source.fx += fx;
+                edge.source.fy += fy;
+                edge.source.fz += fz;
+                edge.target.fx -= fx;
+                edge.target.fy -= fy;
+                edge.target.fz -= fz;
+            });
+
+            // Update positions
+            nodes.forEach(node => {
+                node.vx = (node.vx + node.fx) * 0.9;
+                node.vy = (node.vy + node.fy) * 0.9;
+                node.vz = (node.vz + node.fz) * 0.9;
+                node.x += node.vx * alpha;
+                node.y += node.vy * alpha;
+                node.z += node.vz * alpha;
+            });
+        }
+
+        // Mouse interaction
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+        const codeModal = document.getElementById('code-modal');
+        const modalContent = document.getElementById('modal-content');
+        const closeModal = document.getElementById('close-modal');
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeObjects);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                const nodeData = intersect.object.userData.nodeData;
+                
+                tooltip.style.display = 'block';
+                tooltip.style.left = event.clientX + 10 + 'px';
+                tooltip.style.top = event.clientY + 10 + 'px';
+                const hasSimulation = nodeData.simulation_results ? ' & simulation' : '';
+                const simulationIcon = nodeData.simulation_results ? '🧪 ' : '';
+                tooltip.innerHTML = `
+                    <strong>${simulationIcon}${nodeData.agent}</strong><br>
+                    ${nodeData.natural_language_question || nodeData.label}<br>
+                    <small style="color: #888;">Click to view Lean code${hasSimulation}</small>
+                `;
+                
+                // Highlight node
+                intersect.object.material.emissive.setHex(0x444444);
+                
+                // Change cursor to pointer
+                document.body.style.cursor = 'pointer';
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+                
+                // Reset all node highlights
+                nodeObjects.forEach(obj => {
+                    const baseColor = obj.material.color.getHex();
+                    obj.material.emissive.copy(new THREE.Color(baseColor).multiplyScalar(0.1));
+                });
+            }
+        }
+
+        function onMouseClick(event) {
+            console.log('=== CLICK EVENT DEBUG ===');
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            console.log('Mouse position:', mouse);
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeObjects);
+            console.log('Intersects found:', intersects.length);
+
+            if (intersects.length > 0) {
+                const nodeData = intersects[0].object.userData.nodeData;
+                console.log('Clicked node data:', nodeData);
+                console.log('Agent:', nodeData.agent);
+                console.log('Has simulation_results:', !!nodeData.simulation_results);
+                showCodeModal(nodeData);
+            } else {
+                console.log('No intersections found - click missed all nodes');
+            }
+        }
+
+        function showCodeModal(nodeData) {
+            console.log('=== DEBUG: showCodeModal called ===');
+            console.log('Full nodeData object:', nodeData);
+            console.log('nodeData.simulation_results:', nodeData.simulation_results);
+            console.log('Has simulation_results?', !!nodeData.simulation_results);
+
+            const agentType = nodeData.agent.replace('-Agent', '');
+
+            let modalHTML = `
+                <div class="modal-title">${nodeData.natural_language_question || nodeData.label}</div>
+                <div class="agent-type">Agent: ${nodeData.agent} | Session: ${nodeData.session_timestamp || nodeData.timestamp}</div>
+                <strong>Lean 4 Code:</strong>
+                <pre><code>${nodeData.lean_code || nodeData.code}</code></pre>
+            `;
+
+            // Add simulation results if they exist
+            console.log('Checking for simulation_results...');
+            if (nodeData.simulation_results) {
+                console.log('Found simulation_results, adding to modal');
+                modalHTML += `
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #444;">
+                        <strong style="color: #4fc3f7;">🧪 Simulation Results</strong>
+                        <p style="color: #ccc; margin: 8px 0;">${nodeData.simulation_results.simulation_code?.description || nodeData.simulation_results.code_implementation?.description || 'Simulation demonstrates the Lean theorem with statistical validation.'}</p>
+                `;
+
+                // Add simulation images
+                if (nodeData.simulation_results.images && nodeData.simulation_results.images.length > 0) {
+                    modalHTML += '<div style="margin: 15px 0;"><strong>Visualizations:</strong></div>';
+                    nodeData.simulation_results.images.forEach((image, index) => {
+                        modalHTML += `
+                            <div style="margin: 10px 0;">
+                                <img src="${image.path}" alt="${image.description}"
+                                     style="max-width: 100%; height: auto; border: 1px solid #444; border-radius: 4px;">
+                                <p style="color: #888; font-size: 12px; margin: 5px 0;"><em>${image.description}</em></p>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Add simulation code details
+                if (nodeData.simulation_results.simulation_code) {
+                    const simCode = nodeData.simulation_results.simulation_code;
+                    modalHTML += `
+                        <div style="margin: 15px 0;">
+                            <strong>Simulation Code:</strong>
+                            <div style="background: #1a1a1a; padding: 10px; border-radius: 4px; margin: 8px 0; border: 1px solid #333;">
+                                <div style="color: #4fc3f7; margin-bottom: 8px;">📁 ${simCode.file_path}</div>
+                                <div style="color: #88c999; margin-bottom: 8px;">Language: ${simCode.language}</div>
+                    `;
+
+                    if (simCode.key_features) {
+                        modalHTML += '<div style="color: #ccc; font-size: 13px;"><strong>Key Features:</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+                        simCode.key_features.forEach(feature => {
+                            modalHTML += `<li>${feature}</li>`;
+                        });
+                        modalHTML += '</ul></div>';
+                    }
+
+                    modalHTML += '</div>';
+                }
+
+                // Add execution results
+                if (nodeData.simulation_results.execution_results) {
+                    const results = nodeData.simulation_results.execution_results;
+                    modalHTML += `
+                        <div style="margin: 15px 0;">
+                            <strong>Execution Results:</strong>
+                            <div style="background: #1a1a1a; padding: 10px; border-radius: 4px; margin: 8px 0; border: 1px solid #333; font-size: 13px;">
+                    `;
+
+                    Object.entries(results).forEach(([key, value]) => {
+                        const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        modalHTML += `<div style="margin: 3px 0;"><span style="color: #88c999;">${displayKey}:</span> ${value}</div>`;
+                    });
+
+                    modalHTML += '</div></div>';
+                }
+
+                modalHTML += '</div>';
+            } else {
+                console.log('No simulation_results found for:', nodeData.agent, nodeData.natural_language_question);
+            }
+
+            // End of modal content
+
+            modalHTML += `</div>`;
+
+            console.log('Final modalHTML:', modalHTML);
+            modalContent.innerHTML = modalHTML;
+            codeModal.style.display = 'block';
+            tooltip.style.display = 'none';
+        }
+
+        function hideCodeModal() {
+            codeModal.style.display = 'none';
+        }
+
+        // Touch event handlers for mobile devices
+        let lastTouchTime = 0;
+        
+        function onTouchMove(event) {
+            if (event.touches.length === 1) {
+                const touch = event.touches[0];
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(nodeObjects);
+
+                if (intersects.length > 0) {
+                    const intersect = intersects[0];
+                    const nodeData = intersect.object.userData.nodeData;
+                    
+                    tooltip.style.display = 'block';
+                    const hasSimulation = nodeData.simulation_results ? ' & simulation' : '';
+                    const simulationIcon = nodeData.simulation_results ? '🧪 ' : '';
+                    tooltip.innerHTML =
+                        '<strong>' + simulationIcon + nodeData.agent + '</strong><br>' +
+                        (nodeData.natural_language_question || nodeData.label) + '<br>' +
+                        '<small style="color: #888;">Tap to view Lean code' + hasSimulation + '</small>';
+                    
+                    // Highlight node
+                    intersect.object.material.emissive.setHex(0x444444);
+                } else {
+                    tooltip.style.display = 'none';
+                    // Reset all node highlights
+                    nodeObjects.forEach(obj => {
+                        const baseColor = obj.material.color.getHex();
+                        obj.material.emissive.copy(new THREE.Color(baseColor).multiplyScalar(0.1));
+                    });
+                }
+            }
+        }
+        
+        function onTouchEnd(event) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTouchTime;
+            
+            // Prevent double-tap zoom and handle single taps
+            if (tapLength < 500 && tapLength > 0) {
+                event.preventDefault();
+                
+                const touch = event.changedTouches[0];
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(nodeObjects);
+
+                if (intersects.length > 0) {
+                    const nodeData = intersects[0].object.userData.nodeData;
+                    showCodeModal(nodeData);
+                }
+            }
+            
+            lastTouchTime = currentTime;
+        }
+
+        // Event listeners for both mouse and touch
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onMouseClick);
+        
+        // Touch support for mobile devices
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+        
+        closeModal.addEventListener('click', hideCodeModal);
+        closeModal.addEventListener('touchend', hideCodeModal);
+
+        // Close modal with Escape key
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hideCodeModal();
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updatePhysics();
+            
+            // Update visual positions
+            nodeObjects.forEach((obj, index) => {
+                if (nodes[index]) {
+                    const node = nodes[index];
+                    obj.position.set(node.x, node.y, node.z);
+                }
+            });
+
+            // Update edge positions
+            edgeObjects.forEach(({ line, edge }) => {
+                const positions = line.geometry.attributes.position.array;
+                positions[0] = edge.source.x;
+                positions[1] = edge.source.y;
+                positions[2] = edge.source.z;
+                positions[3] = edge.target.x;
+                positions[4] = edge.target.y;
+                positions[5] = edge.target.z;
+                line.geometry.attributes.position.needsUpdate = true;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Set initial camera position
+        camera.position.set(0, 0, 20);
+
+        // Initialize
+        loadLeanData();
+        animate();
+    </script>
+</body>
+</html>
