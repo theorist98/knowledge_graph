@@ -460,25 +460,25 @@
                     "code_implementation": {
                         "language": "python",
                         "file_path": "public/simulations/probability_example_simulation.py",
-                        "description": "Monte Carlo simulation demonstrating the Lean theorem probability_example. Models discrete probability spaces with OutcomeSet structure and validates theoretical probability calculations through statistical convergence analysis.",
+                        "description": "Monte Carlo simulation demonstrating the Lean probability_example theorem. Analyzes discrete probability spaces with OutcomeSet structure and validates theoretical probability calculations through statistical convergence analysis.",
                         "key_features": [
                             "Mirrors Lean OutcomeSet structure and calculate_probability function in Python",
-                            "Validates theorem: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10)",
-                            "Monte Carlo convergence with 10,000+ trials showing empirical convergence to 30%",
-                            "Comprehensive probability scenario analysis from 0.3% to 80% ranges",
-                            "Statistical comparison of theoretical vs empirical probabilities with error analysis"
+                            "Verifies probability_example theorem: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10)",
+                            "Analyzes ten probability scenarios: coin flips, dice rolls, card draws, lottery picks",
+                            "Demonstrates Monte Carlo convergence with 10,000+ trials showing empirical convergence to 30%",
+                            "Validates discrete probability calculation with favorable/total outcome ratio"
                         ]
                     },
                     "statistical_results": {
-                        "theorem_verification": "probability_example: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10) (verified)",
-                        "theoretical_probability": "3/10 = 0.3 = 30%",
-                        "monte_carlo_trials": "10,000 trials with convergence to theoretical probability",
-                        "probability_scenarios": "10 scenarios analyzed from 0.3% to 80% probability ranges",
-                        "convergence_error": "Final error: 0.0113 (1.13%) after 10,000 trials",
-                        "statistical_validation": "Empirical probabilities converge to theoretical values demonstrating law of large numbers",
+                        "theorem_verification": "probability_example: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10) (verified for all test cases)",
+                        "theoretical_probability": "3/10 = 0.3 = 30% (3 favorable outcomes out of 10 total)",
+                        "monte_carlo_trials": "10,000 trials with final convergence error: 0.0113 (1.13%)",
+                        "probability_scenarios": "10 scenarios analyzed from 0.3% (rare events) to 80% (common events)",
+                        "convergence_validation": "Empirical probabilities converge to theoretical values demonstrating law of large numbers",
+                        "statistical_distribution": "Mean probability 37.0%, median 50.0% across different outcome scenarios",
                         "csv_exports": "probability_example_analysis.csv, probability_example_convergence.csv"
                     },
-                    "inline_code": "from dataclasses import dataclass\nfrom typing import List, Tuple\n\n@dataclass(frozen=True)\nclass OutcomeSet:\n    outcomes: List[int]\n    favorable: List[int]\n\ndef calculate_probability(os: OutcomeSet) -> Tuple[int, int]:\n    return (len(os.favorable), len(os.outcomes))\n\n# Test the Lean theorem\nlean_example = OutcomeSet(\n    outcomes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n    favorable=[2, 4, 6]\n)\nresult = calculate_probability(lean_example)\nassert result == (3, 10)\nprint('Theorem verified: calculate_probability = (3, 10)')\nprint('Probability: 3/10 = 0.3 = 30%')\n\n# Test additional probability scenarios\ntest_scenarios = [\n    ('Coin Flip', OutcomeSet([1, 2], [1])),\n    ('Fair Die Even', OutcomeSet([1, 2, 3, 4, 5, 6], [2, 4, 6])),\n    ('Card Red', OutcomeSet(list(range(1, 53)), list(range(1, 27)))),\n    ('Lottery', OutcomeSet(list(range(1, 11)), [7]))\n]\n\nprint('Analyzing probability calculations:')\nfor name, outcome_set in test_scenarios:\n    prob_counts = calculate_probability(outcome_set)\n    prob_percentage = (prob_counts[0] / prob_counts[1]) * 100\n    print(f'  {name}: {prob_counts[0]}/{prob_counts[1]} = {prob_percentage:.1f}%')\n\nprint('Theorem verification: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10) (verified for all test cases)')"
+                    "inline_code": "from dataclasses import dataclass\nfrom typing import List, Tuple\n\n@dataclass(frozen=True)\nclass OutcomeSet:\n    outcomes: List[int]\n    favorable: List[int]\n\ndef calculate_probability(os: OutcomeSet) -> Tuple[int, int]:\n    \"\"\"\n    Python analogue of the Lean calculate_probability function:\n    Returns (number of favorable outcomes, total number of outcomes)\n    \"\"\"\n    return (len(os.favorable), len(os.outcomes))\n\n# Create the exact example from the Lean theorem\nlean_example = OutcomeSet(\n    outcomes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n    favorable=[2, 4, 6]\n)\n\nresult = calculate_probability(lean_example)\nassert result == (3, 10), f'probability_example failed: got {result}, expected (3, 10)'\nprint('Theorem verified: calculate_probability(<[1,2,3,4,5,6,7,8,9,10], [2,4,6]>) = (3, 10)')\n\n# Test additional probability scenarios\ntest_scenarios = [\n    ('Coin Flip', OutcomeSet([1, 2], [1])),\n    ('Fair Die Even', OutcomeSet([1, 2, 3, 4, 5, 6], [2, 4, 6])),\n    ('Card Red', OutcomeSet(list(range(1, 53)), list(range(1, 27)))),\n    ('Small Lottery', OutcomeSet(list(range(1, 11)), [7]))\n]\n\nprint('Analyzing probability calculations:')\nfor name, outcome_set in test_scenarios:\n    prob_counts = calculate_probability(outcome_set)\n    prob_percentage = (prob_counts[0] / prob_counts[1]) * 100\n    print(f'  {name}: {prob_counts[0]}/{prob_counts[1]} = {prob_percentage:.1f}%')\n\nprint('Theorem verification: calculate_probability returns (favorable, total) counts as required')"
                 }
             },
             {
