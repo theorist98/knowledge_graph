@@ -445,19 +445,9 @@
                             "filename": "probability_example_distribution.png",
                             "description": "Bar chart showing probability percentages across 10 different scenarios, highlighting the Lean example with 30% probability (3/10)",
                             "path": "public/simulations/probability_example_distribution.png"
-                        },
-                        {
-                            "filename": "probability_example_convergence.png",
-                            "description": "Monte Carlo convergence analysis showing empirical probabilities approaching theoretical 0.3 value with error analysis over 10,000 trials",
-                            "path": "public/simulations/probability_example_convergence.png"
-                        },
-                        {
-                            "filename": "probability_example_categories.png",
-                            "description": "Probability scenarios grouped by ranges (low, medium, high) with stacked bar charts showing favorable vs unfavorable outcomes",
-                            "path": "public/simulations/probability_example_categories.png"
                         }
                     ],
-                    "code_implementation": {
+                    "simulation_code": {
                         "language": "python",
                         "file_path": "public/simulations/probability_example_simulation.py",
                         "description": "Monte Carlo simulation demonstrating the Lean theorem probability_example. Models discrete probability spaces with OutcomeSet structure and validates theoretical probability calculations through statistical convergence analysis.",
@@ -469,15 +459,13 @@
                             "Statistical comparison of theoretical vs empirical probabilities with error analysis"
                         ]
                     },
-                    "statistical_results": {
+                    "execution_results": {
                         "theorem_verification": "calculate_probability = (3, 10) verified",
                         "theoretical_probability": "3/10 = 0.3 = 30%",
                         "monte_carlo_trials": 10000,
                         "final_convergence_error": "0.0113 (1.13%)",
-                        "probability_scenarios_tested": 10,
-                        "csv_exports": "probability_example_analysis.csv, probability_example_convergence.csv"
-                    },
-                    "inline_code": "from dataclasses import dataclass\nfrom typing import List, Tuple\n\n@dataclass(frozen=True)\nclass OutcomeSet:\n    outcomes: List[int]\n    favorable: List[int]\n\ndef calculate_probability(os: OutcomeSet) -> Tuple[int, int]:\n    return (len(os.favorable), len(os.outcomes))\n\n# Test the Lean theorem\nlean_example = OutcomeSet(\n    outcomes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n    favorable=[2, 4, 6]\n)\nresult = calculate_probability(lean_example)\nassert result == (3, 10)\nprint('Theorem verified: calculate_probability = (3, 10)')\nprint('Probability: 3/10 = 0.3 = 30%')\n\n# Test additional probability scenarios\ntest_scenarios = [\n    ('Coin Flip', OutcomeSet([1, 2], [1])),\n    ('Fair Die Even', OutcomeSet([1, 2, 3, 4, 5, 6], [2, 4, 6])),\n    ('Card Red', OutcomeSet(list(range(1, 53)), list(range(1, 27)))),\n    ('Lottery', OutcomeSet(list(range(1, 11)), [7]))\n]\n\nprint('Analyzing probability calculations:')\nfor name, outcome_set in test_scenarios:\n    prob_counts = calculate_probability(outcome_set)\n    prob_percentage = (prob_counts[0] / prob_counts[1]) * 100\n    print(f'  {name}: {prob_counts[0]}/{prob_counts[1]} = {prob_percentage:.1f}%')\n\nprint('Probability principle: P = favorable_outcomes / total_outcomes')"
+                        "key_insight": "Discrete probability calculation with favorable/total outcome ratio"
+                    }
                 }
             },
             {
@@ -582,42 +570,29 @@
                     "images": [
                         {
                             "filename": "vector_addition_commutative_verification.png",
-                            "description": "Geometric visualization of 2D vector addition showing u+v and v+u vectors overlapping perfectly, with component-wise analysis for higher dimensional vectors confirming commutativity",
+                            "description": "Geometric visualization of 2D vector addition showing u+v and v+u vectors overlapping perfectly, demonstrating commutativity with green verification circles",
                             "path": "public/simulations/vector_addition_commutative_verification.png"
-                        },
-                        {
-                            "filename": "vector_addition_commutative_statistics.png",
-                            "description": "Statistical analysis showing dimension distribution of 200 random vector operations and magnitude relationships in vector addition",
-                            "path": "public/simulations/vector_addition_commutative_statistics.png"
-                        },
-                        {
-                            "filename": "vector_addition_commutative_inner_products.png",
-                            "description": "Inner product space operations verification showing <u+v, w> = <v+u, w> equality across different vector combinations, demonstrating linearity preservation",
-                            "path": "public/simulations/vector_addition_commutative_inner_products.png"
                         }
                     ],
-                    "code_implementation": {
+                    "simulation_code": {
                         "language": "python",
                         "file_path": "public/simulations/vector_addition_commutative_simulation.py",
-                        "description": "Comprehensive simulation demonstrating vector addition commutativity in inner product spaces. Implements element-wise addition with automatic dimension padding and verifies the theorem through geometric, statistical, and algebraic analysis.",
+                        "description": "Comprehensive simulation demonstrating vector addition commutativity in inner product spaces. Implements element-wise addition with automatic dimension padding and verifies theorem through geometric and statistical analysis.",
                         "key_features": [
                             "Mirrors Lean InnerProductSpace structure and vectorAddition function in Python",
                             "Element-wise vector addition: zipWith Nat.add u.elements v.elements",
                             "Geometric verification showing u+v = v+u through 2D vector visualization",
                             "Statistical validation across 90+ vector pair combinations with 100% success rate",
-                            "Inner product linearity verification: <u+v, w> = <v+u, w>",
                             "Automatic dimension padding for vectors of different sizes"
                         ]
                     },
-                    "statistical_results": {
-                        "theorem_verification": "vectorAddition(u, v) = vectorAddition(v, u) verified for all 90 combinations",
-                        "commutativity_success_rate": "100% (90/90 test cases)",
+                    "execution_results": {
+                        "commutativity_success_rate": "100% (verified for all 90 test combinations)",
+                        "theorem_verification": "vectorAddition(u, v) = vectorAddition(v, u) holds for all cases",
+                        "dimension_range": "1-6 dimensional vectors tested successfully",
                         "monte_carlo_operations": 200,
-                        "dimension_range": "1-6 dimensional vectors tested",
-                        "magnitude_analysis": "Average magnitude ratio: 0.911",
-                        "csv_exports": "vector_addition_commutative_results.csv, vector_addition_commutative_magnitudes.csv, vector_addition_commutative_operations.csv"
-                    },
-                    "inline_code": "from dataclasses import dataclass\nfrom typing import List, Callable, Tuple\n\n@dataclass(frozen=True)\nclass InnerProductSpace:\n    elements: List[int]\n    inner_product: Callable[[Tuple[int, int]], int] = None\n\ndef vector_addition(u: InnerProductSpace, v: InnerProductSpace) -> InnerProductSpace:\n    max_len = max(len(u.elements), len(v.elements))\n    u_padded = u.elements + [0] * (max_len - len(u.elements))\n    v_padded = v.elements + [0] * (max_len - len(v.elements))\n    result_elements = [a + b for a, b in zip(u_padded, v_padded)]\n    return InnerProductSpace(elements=result_elements, inner_product=u.inner_product or v.inner_product)\n\n# Test the Lean theorem\nu = InnerProductSpace(elements=[3, 4])\nv = InnerProductSpace(elements=[1, 2])\nuv = vector_addition(u, v)  # [4, 6]\nvu = vector_addition(v, u)  # [4, 6]\nassert uv.elements == vu.elements\nprint('Theorem verified: vectorAddition(u, v) = vectorAddition(v, u)')\n\n# Test vector scenarios with different dimensions\ntest_vectors = [\n    ('2D Unit', InnerProductSpace([1, 0])),\n    ('3D Vector', InnerProductSpace([1, 2, 3])),\n    ('4D Vector', InnerProductSpace([2, 1, 4, 3])),\n    ('Zero Vector', InnerProductSpace([0, 0, 0]))\n]\n\nprint('Verifying commutativity across dimensions:')\nfor name_u, vec_u in test_vectors[:2]:\n    for name_v, vec_v in test_vectors[2:4]:\n        uv = vector_addition(vec_u, vec_v)\n        vu = vector_addition(vec_v, vec_u)\n        is_commutative = uv.elements == vu.elements\n        print(f'  {name_u} + {name_v}: {vec_u.elements} + {vec_v.elements} = {uv.elements} (commutative: {is_commutative})')\n\nprint('Vector addition principle: u + v = v + u (element-wise addition with dimension padding)')"
+                        "key_insight": "Element-wise addition with dimension padding preserves commutativity"
+                    }
                 }
             },
             {
